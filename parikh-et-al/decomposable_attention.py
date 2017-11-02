@@ -3,11 +3,13 @@ import torch.nn as nn
 
 from .modules.TimeDistributed import TimeDistributed
 
+PROJECTION_DIM = 200
+
 
 def build_model(vectors, shape, settings):
 
     global embedding
-    embedding = nn.Embedding(vectors.shape(0), vectors.shape(1))
+    embedding = nn.Embedding(vectors.shape(0), vectors.shape(1), max_norm=1)
     embedding.weight.data.copy_(vectors)
 
     # Fix weights for training
@@ -25,12 +27,16 @@ def init_weights(model):
             module.weight.data.normal_(mean, stddev)
 
 
+def get_embedded_mask(embedded):
+    return (embedded != 0).float()
+
+
 class DecomposableAttention(nn.Module):
     def __init__(self, shape, settings):
         global embedding
         self.embedding = embedding
-
         self.max_length, self.nr_hidden, self.nr_class = shape
+        self.projection = nn.Linear(self.nr_hidden, PROJECTION_DIM)
 
         if settings['gru_encode']:
             self.encoder = BiRNNEncoder(max_length, nr_hidden,
@@ -44,11 +50,17 @@ class DecomposableAttention(nn.Module):
         self.compare = Comparator(max_length, nr_hidden,
                                   dropout=settings['dropout'])
         self.aggregate = Aggregate(nr_hidden, nr_class,
-                                 dropout=settings['dropout'])
+                                   dropout=settings['dropout'])
 
     def forward(self, premise, hypo):
         premise = self.embedding(premise)
         hypo = self.embedding(premise)
+
+        premise = self.projection(premise)
+        hypo = self.projection(hypo)
+
+        premise_mask = get_embedded_mask(premise)
+        hypo_mask = get_embedded_mask(hypo)
 
         if settings['gru_encode']:
             premise = self.encoder(premise)
@@ -69,7 +81,15 @@ class DecomposableAttention(nn.Module):
         hypo_compare_input = torch.cat([hypo, aligned_hypo], dim=-1)
 
         compared_premise = self.compare(premise_compare_input)
+        compared_premise = compared_premise * premise_mask.unsqueeze(-1)
+        # Shape: (batch_size, compare_dim)
+        compared_premise = compared_premise.sum(dim=1)
+
         compared_hypo = self.compare(hypo_compare_input)
+        compared_hypo = compared_hypo * hypo_mask.unsqueeze(-1)
+        # Shape: (batch_size, compare_dim)
+        compared_hypo = compared_hypo.sum(dim=1)
+
 
         scores = self.aggregate(compared_premise, compared_hypo)
 
