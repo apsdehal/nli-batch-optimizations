@@ -34,22 +34,26 @@ class PyTorchSimilarityShim(object):
         doc.user_span_hooks['similarity'] = self.predict
 
     def predict(self, doc1, doc2):
-        x1 = self.get_features([doc1], max_length=self.max_length, tree_truncate=True)
-        x2 = self.get_features([doc2], max_length=self.max_length, tree_truncate=True)
+        x1 = self.get_features([doc1], max_length=self.max_length,
+                               tree_truncate=True)
+        x2 = self.get_features([doc2], max_length=self.max_length,
+                               tree_truncate=True)
         scores = self.model.predict([x1, x2])
         return scores[0]
 
 
 def get_embeddings(vocab, nr_unk=100):
     nr_vector = max(lex.rank for lex in vocab) + 1
-    vectors = numpy.zeros((nr_vector+nr_unk+2, vocab.vectors_length), dtype='float32')
+    vectors = numpy.zeros((nr_vector + nr_unk + 2,
+                          vocab.vectors_length), dtype='float32')
     for lex in vocab:
         if lex.has_vector:
-            vectors[lex.rank+1] = lex.vector / lex.vector_norm
+            vectors[lex.rank + 1] = lex.vector / lex.vector_norm
     return vectors
 
 
-def get_word_ids(docs, rnn_encode=False, tree_truncate=False, max_length=100, nr_unk=100):
+def get_word_ids(docs, rnn_encode=False, tree_truncate=False,
+                 max_length=100, nr_unk=100):
     Xs = numpy.zeros((len(docs), max_length), dtype='int32')
     for i, doc in enumerate(docs):
         if tree_truncate:
@@ -70,9 +74,9 @@ def get_word_ids(docs, rnn_encode=False, tree_truncate=False, max_length=100, nr
         words.sort()
         for j, token in enumerate(words):
             if token.has_vector:
-                Xs[i, j] = token.rank+1
+                Xs[i, j] = token.rank + 1
             else:
-                Xs[i, j] = (token.shape % (nr_unk-1))+2
+                Xs[i, j] = (token.shape % (nr_unk - 1)) + 2
             j += 1
             if j >= max_length:
                 break

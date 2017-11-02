@@ -90,7 +90,6 @@ class DecomposableAttention(nn.Module):
         # Shape: (batch_size, compare_dim)
         compared_hypo = compared_hypo.sum(dim=1)
 
-
         scores = self.aggregate(compared_premise, compared_hypo)
 
         return scores
