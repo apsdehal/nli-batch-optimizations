@@ -1,9 +1,10 @@
 import numpy as np
 import torch.nn as nn
 
+from .modules.TimeDistributed import TimeDistributed
+
 
 def build_model(vectors, shape, settings):
-    max_length, nr_hidden, nr_class = shape
 
     global embedding
     embedding = nn.Embedding(vectors.shape(0), vectors.shape(1))
@@ -19,17 +20,21 @@ class DecomposableAttention(nn.Module):
     def __init__(self, shape, settings):
         global embedding
         self.embedding = embedding
+
+        self.max_length, self.nr_hidden, self.nr_class = shape
+
         if settings['gru_encode']:
             self.encoder = BiRNNEncoder(max_length, nr_hidden,
                                         dropout=settings['dropout'])
 
         self.attender = Attention(max_length, nr_hidden,
                                   dropout=settings['dropout'])
+
         self.align = SoftAlignment(max_length, nr_hidden)
 
         self.compare = Comparator(max_length, nr_hidden,
                                   dropout=settings['dropout'])
-        self.entail = Entailment(nr_hidden, nr_class,
+        self.aggregate = Aggregate(nr_hidden, nr_class,
                                  dropout=settings['dropout'])
 
     def forward(self, premise, hypo):
@@ -40,14 +45,76 @@ class DecomposableAttention(nn.Module):
             premise = self.encoder(premise)
             hypo = self.encoder(hypo)
 
-        attention = self.attender(premise, hypo)
+        projected_premise = self.attender(premise)
+        projected_hypo = self.attender(hypo)
 
-        align1 = self.align(hypo, attention)
-        align2 = self.align(premise, attention)
+        att_ji = projected_hypo.bmm(projected_premise.permute(0, 2, 1))
 
-        feats1 = self.compare(premise, align1)
-        feats2 = self.compare(hypo, align2)
+        # Shape: batch_length * max_length * max_length
+        att_ij = att_ji.permute(0, 1, 2)
+
+        aligned_hypothesis = self.align(hypo, attention)
+        aligned_premise = self.align(premise, attention, transpose=True)
+
+        premise_compare_input = torch.cat([premise, aligned_premise], dim=-1)
+        hypo_compare_input = torch.cat([hypo, aligned_hypo], dim=-1)
+
+        compared_premise = self.compare(premise_compare_input)
+        compared_hypo = self.compare(hypo_compare_input)
 
         scores = entail(feats1, feats2)
 
         return scores
+
+
+class Attention(nn.Module):
+    def __init__(self, max_length, nr_hidden, dropout=0.0):
+        self.model = TimeDistributed(nn.Sequential(
+            nn.Dropout(p=dropout),
+            nn.Linear(nr_hidden, nr_hidden),
+            nn.ReLU(),
+            nn.Dropout(p=dropout),
+            nn.Linear(nr_hidden, nr_hidden),
+            nn.ReLU()
+        ))
+
+    def forward(self, sentence):
+        return self.model(sentence)
+
+
+class SoftAlignment(nn.Module):
+    def __init__(self, max_length, nr_hidden):
+        self.max_length = max_length
+        self.nr_hidden = nr_hidden
+
+    def forward(self, sentence, attention_matrix, transpose=False):
+        if transpose:
+            attention_matrix = attention_matrix.permute(0, 2, 1)
+
+        exponents = torch.exp(attention_matrix -
+                              torch.max(attention_matrix,
+                                        dim=-1,
+                                        keepdims=True)[0])
+
+        summation = torch.sum(exponents, dim=-1, keepdims=True)
+
+        attention_weights = exponents / summation
+
+        return attention_weights.bmm(sentence)
+
+
+class Comparison(nn.Module):
+    def __init__(self, max_length, nr_hidden, dropout=0):
+        self.max_length = max_length
+        self.nr_hidden = nr_hidden
+        self.model = TimeDistributed(nn.Sequential(
+            nn.Dropout(p=dropout),
+            nn.Linear(nr_hidden * 2, nr_hidden),
+            nn.ReLU(),
+            nn.Dropout(p=dropout),
+            nn.Linear(nr_hidden, nr_hidden),
+            nn.ReLU()
+        ))
+
+    def forward(self, concatenated_aligned_sentence):
+        return self.model(concatenated_aligned_sentence)
