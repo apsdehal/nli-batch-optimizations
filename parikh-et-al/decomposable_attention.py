@@ -16,6 +16,15 @@ def build_model(vectors, shape, settings):
     return DecomposableAttention(shape, settings)
 
 
+def init_weights(model):
+    # As mentioned in paper
+    mean = 0
+    stddev = 0.01
+    for module in model.modules():
+        if isinstance(module, nn.Linear):
+            module.weight.data.normal_(mean, stddev)
+
+
 class DecomposableAttention(nn.Module):
     def __init__(self, shape, settings):
         global embedding
@@ -62,7 +71,7 @@ class DecomposableAttention(nn.Module):
         compared_premise = self.compare(premise_compare_input)
         compared_hypo = self.compare(hypo_compare_input)
 
-        scores = entail(feats1, feats2)
+        scores = self.aggregate(compared_premise, compared_hypo)
 
         return scores
 
@@ -77,6 +86,8 @@ class Attention(nn.Module):
             nn.Linear(nr_hidden, nr_hidden),
             nn.ReLU()
         ))
+
+        init_weights(self.model)
 
     def forward(self, sentence):
         return self.model(sentence)
@@ -115,6 +126,23 @@ class Comparison(nn.Module):
             nn.Linear(nr_hidden, nr_hidden),
             nn.ReLU()
         ))
+        init_weights(self.model)
 
     def forward(self, concatenated_aligned_sentence):
         return self.model(concatenated_aligned_sentence)
+
+
+class Aggregate(nn.Module):
+    def __init__(self, nr_hidden, nr_out, dropout=0.0):
+        self.model = nn.Sequential(
+            nn.Dropout(p=dropout),
+            nn.Linear(nr_hidden * 2, nr_hidden),
+            nn.ReLU(),
+            nn.Dropout(p=dropout),
+            nn.Linear(nr_hidden, nr_out)
+        )
+
+        init_weights(self.model)
+
+    def forward(self, input):
+        return self.model(input)
