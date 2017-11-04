@@ -9,10 +9,11 @@ import logging
 import spacy
 
 
+from utils import read_multinli
 from spacy_hook import get_embeddings, get_word_ids
 from spacy_hook import create_similarity_pipeline
 
-from decomposable_attention_pytorch import build_model
+from decomposable_attention import build_model
 try:
     import cPickle as pickle
 except ImportError:
@@ -20,11 +21,6 @@ except ImportError:
 
 
 log = logging.getlogger(__name__)
-
-
-def to_categorical(y, num_classes):
-    """ 1-hot encodes a tensor """
-    return np.eye(num_classes, dtype='uint8')[y]
 
 
 class NLIDataset(Dataset):
@@ -47,7 +43,7 @@ def train(train_loc, dev_loc, shape, settings):
     dev_premise_text, dev_hypo_text, dev_labels = read_multinli(dev_loc)
 
     log.debug("Loading spaCy")
-    nlp = space.load('en')
+    nlp = spacy.load('en')
 
     model = build_model(get_embeddings(nlp.vocab), shape, settings)
 
@@ -137,26 +133,6 @@ def demo():
     log.info(doc1)
     log.info(doc2)
     log.info("Similarity %f" % doc1.similarity(doc2))
-
-
-LABELS = {'entailment': 0, 'contradiction': 1, 'neutral': 2}
-
-
-def read_multinli(path):
-    premise = []
-    hypo = []
-    labels = []
-
-    with path.open() as file_:
-        for line in file_:
-            eg = json.loads(line)
-            label = eg['gold_label']
-            if label == '-':
-                continue
-            texts1.append(eg['sentence1'])
-            texts2.append(eg['sentence2'])
-            labels.append(LABELS[label])
-    return premise, hypo, to_categorical(np.asarray(labels, dtype='int32'), 3)
 
 
 @plac.annotations(

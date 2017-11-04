@@ -1,7 +1,7 @@
 import numpy as np
 import torch.nn as nn
 
-from .modules.TimeDistributed import TimeDistributed
+from modules.TimeDistributed import TimeDistributed
 
 PROJECTION_DIM = 200
 
