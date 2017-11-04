@@ -1,2 +1,7 @@
 __pycache__
 *.pyc
+*.json
+*.jsonl
+*.zip
+data/*
+!data/sample.jsonl
