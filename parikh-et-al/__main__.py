@@ -1,5 +1,8 @@
 import plac
 from pathlib import Path
+from torch.utils.data import Dataset, DataLoader
+from torch import nn, optim
+from torch.autograd import Variable
 import numpy as np
 import ujson as json
 import logging
@@ -24,6 +27,20 @@ def to_categorical(y, num_classes):
     return np.eye(num_classes, dtype='uint8')[y]
 
 
+class NLIDataset(Dataset):
+    def __init__(self, data, labels):
+        assert len(self.data[0]) == len(self.labels)
+        assert len(self.data[0]) == len(self.data[1])
+        self.data = data
+        self.labels = labels
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, key):
+        return (self.data[0][key], self.data[1][key]), self.labels[key]
+
+
 def train(train_loc, dev_loc, shape, settings):
     data = read_multinli(train_loc)
     train_premise_text, train_hypo_text, train_labels = data
@@ -44,8 +61,55 @@ def train(train_loc, dev_loc, shape, settings):
                     tree_truncate=settings['tree_truncate']))
 
     train_premise, train_hypo, dev_premise, dev_hypo = data
+    nli_train = NLIDataset((train_premise, train_hypo), train_labels)
+    nli_dev = NLIDataset((dev_premise, dev_hypo), dev_labels)
 
-    # Add code to train here
+    train_loader = DataLoader(dataset=nli_train,
+                              shuffle=True,
+                              batch_size=settings['batch_size'])
+    dev_loader = DataLoader(dataset=nli_train,
+                            shuffle=False,
+                            batch_size=settings['batch_size'])
+
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=settings['lr'])
+
+    for epoch in range(num_epochs):
+        for i, (premise, hypo, labels) in enumerate(train_loader):
+            premise_batch, hypo_batch = Variable(premise), Variable(hypo)
+            label_batch = Variable(labels)
+            optimizer.zero_grad()
+            output = model(premise_batch, hypo_batch)
+            loss = criterion(output, label_batch.float())
+            loss.backward()
+            optimizer.step()
+
+            if (i + 1) % (settings['batch_size'] * 4) == 0:
+                train_acc = test_model(train_loader, model)
+                vali_acc = test_model(val_loader, model)
+                print('Epoch: [{0}/{1}], Step: [{2}/{3}], Loss: {4},' +
+                      'Train Acc: {5}, Validation Acc:{6}'
+                      .format(epoch + 1,
+                              num_epochs,
+                              i + 1,
+                              len(nli_train) // settings['batch_size'],
+                              loss.data[0],
+                              train_acc,
+                              val_acc))
+
+
+def test_model(loader, model):
+    model.eval()
+    correct = 0
+    total = 0
+
+    for premise, hypo, labels in loader:
+        premise_batch, hypo_batch = Variable(premise), Variable(hypo)
+        label_batch = Variable(labels)
+        output = model(premise_batch, hypo_batch)
+        # Need to complete this later
+        print(output)
+    model.train()
 
 
 def evaluate(dev_loc):
