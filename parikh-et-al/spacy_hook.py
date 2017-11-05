@@ -7,6 +7,9 @@ from utils import load_checkpoint
 from decomposable_attention import build_model
 
 
+cuda_available = torch.cuda.is_available()
+
+
 class PyTorchSimilarityShim(object):
     @classmethod
     def load(cls, path, nlp, shape, settings, get_features=None):
@@ -24,6 +27,11 @@ class PyTorchSimilarityShim(object):
 
     def __init__(self, model, get_features=None, max_length=100):
         self.model = model
+
+        if cuda_available:
+            self.model = self.model.cuda()
+
+        self.model.eval()
         self.get_features = get_features
         self.max_length = max_length
 
@@ -36,7 +44,15 @@ class PyTorchSimilarityShim(object):
                                tree_truncate=True)
         x2 = self.get_features([doc2], max_length=self.max_length,
                                tree_truncate=True)
-        scores = self.model.predict([x1, x2])
+
+        x1 = Variable(torch.from_numpy(x1))
+        x2 = Variable(torch.from_numpy(x2))
+
+        if cuda_available:
+            x1 = x1.cuda()
+            x2 = x2.cuda()
+
+        scores = self.model.predict(torch.cat([x1, x2], dim=-1))
         return scores[0]
 
 

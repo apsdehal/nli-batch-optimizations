@@ -19,6 +19,8 @@ from decomposable_attention import build_model
 
 log = logging.getLogger(__name__)
 
+cuda_available = torch.cuda.is_available()
+
 
 class NLIDataset(Dataset):
     def __init__(self, data, labels):
@@ -95,12 +97,22 @@ def train(train_loc, dev_loc, shape, settings):
 
     is_best = False
 
+    if cuda_available:
+        model = model.cuda()
+
+    model.train()
     log.info("Starting training")
     for epoch in range(start_epoch, settings['num_epochs']):
         for i, (premise, hypo, labels) in enumerate(train_loader):
             premise_batch = Variable(premise.long())
             hypo_batch = Variable(hypo.long())
             label_batch = Variable(labels)
+
+            if cuda_available:
+                premise_batch = premise_batch.cuda()
+                hypo_batch = hypo_batch.cuda()
+                label_batch = label_batch.cuda()
+
             optimizer.zero_grad()
             output = model(premise_batch, hypo_batch)
             loss = criterion(output, label_batch.long())
@@ -144,6 +156,12 @@ def test_model(loader, model):
         premise_batch = Variable(premise.long())
         hypo_batch = Variable(hypo.long())
         labels_batch = Variable(labels.long())
+
+        if cuda_available:
+            premise_batch = premise_batch.cuda()
+            hypo_batch = hypo_batch.cuda()
+            label_batch = label_batch.cuda()
+
         output = model(premise_batch, hypo_batch)
         total += 1
         correct += (labels_batch == output.max(1)[1]).data.numpy().sum()
