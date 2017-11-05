@@ -2,6 +2,10 @@ __pycache__
 *.pyc
 *.json
 *.jsonl
+*.txt
+multinli_1.0
+*.pdf
+__MACOSX
 *.zip
 data/*
 !data/sample.jsonl
