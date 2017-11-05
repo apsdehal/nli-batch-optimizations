@@ -192,9 +192,9 @@ def demo():
     learn_rate=("Learning rate", "option", "e", float),
     batch_size=("Batch size for neural network training", "option", "b", int),
     num_epochs=("Number of training epochs", "option", "i", int),
-    resume=("Resume training", "option", "r", Path),
     tree_truncate=("Truncate sentences by tree distance", "flag", "T", bool),
     gru_encode=("Encode sentences with bidirectional GRU", "flag", "E", bool),
+    resume=("Resume training", "option", "r", Path),
 )
 def main(mode, train_loc, dev_loc,
          tree_truncate=False,
