@@ -12,6 +12,7 @@ import spacy
 from utils import read_multinli
 from spacy_hook import get_embeddings, get_word_ids
 from spacy_hook import create_similarity_pipeline
+from config import config
 
 from decomposable_attention import build_model
 try:
@@ -20,21 +21,21 @@ except ImportError:
     import pickle
 
 
-log = logging.getlogger(__name__)
+log = logging.getLogger(__name__)
 
 
 class NLIDataset(Dataset):
     def __init__(self, data, labels):
-        assert len(self.data[0]) == len(self.labels)
-        assert len(self.data[0]) == len(self.data[1])
+        assert len(data[0]) == len(labels)
+        assert len(data[0]) == len(data[1])
         self.data = data
         self.labels = labels
 
     def __len__(self):
-        return len(self.data)
+        return len(self.data[0])
 
     def __getitem__(self, key):
-        return (self.data[0][key], self.data[1][key]), self.labels[key]
+        return self.data[0][key], self.data[1][key], self.labels[key]
 
 
 def train(train_loc, dev_loc, shape, settings):
@@ -44,9 +45,13 @@ def train(train_loc, dev_loc, shape, settings):
 
     log.debug("Loading spaCy")
     nlp = spacy.load('en')
+    log.debug("spaCy loaded")
 
+    log.debug("Building model")
     model = build_model(get_embeddings(nlp.vocab), shape, settings)
+    log.debug("Model built")
 
+    log.debug("Generating word vectors")
     data = []
     for texts in (train_premise_text, train_hypo_text, dev_premise_text,
                   dev_hypo_text):
@@ -55,11 +60,11 @@ def train(train_loc, dev_loc, shape, settings):
                     max_length=shape[0],
                     rnn_encode=settings['gru_encode'],
                     tree_truncate=settings['tree_truncate']))
-
     train_premise, train_hypo, dev_premise, dev_hypo = data
     nli_train = NLIDataset((train_premise, train_hypo), train_labels)
     nli_dev = NLIDataset((dev_premise, dev_hypo), dev_labels)
 
+    log.debug("Creating dataloaders")
     train_loader = DataLoader(dataset=nli_train,
                               shuffle=True,
                               batch_size=settings['batch_size'])
@@ -68,30 +73,34 @@ def train(train_loc, dev_loc, shape, settings):
                             batch_size=settings['batch_size'])
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=settings['lr'])
+    optimizer = optim.Adam(filter(lambda p: p.requires_grad,
+                                  model.parameters()),
+                           lr=settings['lr'])
 
-    for epoch in range(num_epochs):
+    log.info("Starting training")
+    for epoch in range(settings['num_epochs']):
         for i, (premise, hypo, labels) in enumerate(train_loader):
-            premise_batch, hypo_batch = Variable(premise), Variable(hypo)
+            premise_batch = Variable(premise.long())
+            hypo_batch = Variable(hypo.long())
             label_batch = Variable(labels)
             optimizer.zero_grad()
             output = model(premise_batch, hypo_batch)
-            loss = criterion(output, label_batch.float())
+            loss = criterion(output, label_batch.long())
             loss.backward()
             optimizer.step()
 
             if (i + 1) % (settings['batch_size'] * 4) == 0:
                 train_acc = test_model(train_loader, model)
                 vali_acc = test_model(val_loader, model)
-                print('Epoch: [{0}/{1}], Step: [{2}/{3}], Loss: {4},' +
-                      'Train Acc: {5}, Validation Acc:{6}'
-                      .format(epoch + 1,
-                              num_epochs,
-                              i + 1,
-                              len(nli_train) // settings['batch_size'],
-                              loss.data[0],
-                              train_acc,
-                              val_acc))
+                log.info('Epoch: [{0}/{1}], Step: [{2}/{3}], Loss: {4},' +
+                         'Train Acc: {5}, Validation Acc:{6}'
+                         .format(epoch + 1,
+                                 num_epochs,
+                                 i + 1,
+                                 len(nli_train) // settings['batch_size'],
+                                 loss.data[0],
+                                 train_acc,
+                                 val_acc))
 
 
 def test_model(loader, model):
@@ -103,9 +112,11 @@ def test_model(loader, model):
         premise_batch, hypo_batch = Variable(premise), Variable(hypo)
         label_batch = Variable(labels)
         output = model(premise_batch, hypo_batch)
-        # Need to complete this later
-        print(output)
+        total += 1
+        correct += labels.argmax() == output.argmax()
     model.train()
+
+    return correct / total * 100
 
 
 def evaluate(dev_loc):
@@ -145,7 +156,7 @@ def demo():
     dropout=("Dropout level", "option", "d", float),
     learn_rate=("Learning rate", "option", "e", float),
     batch_size=("Batch size for neural network training", "option", "b", int),
-    nr_epoch=("Number of training epochs", "option", "i", int),
+    num_epochs=("Number of training epochs", "option", "i", int),
     tree_truncate=("Truncate sentences by tree distance", "flag", "T", bool),
     gru_encode=("Encode sentences with bidirectional GRU", "flag", "E", bool),
 )
@@ -153,17 +164,17 @@ def main(mode, train_loc, dev_loc,
          tree_truncate=False,
          gru_encode=False,
          max_length=100,
-         nr_hidden=100,
+         nr_hidden=300,
          dropout=0.2,
          learn_rate=0.001,
          batch_size=100,
-         nr_epoch=5):
+         num_epochs=5):
     shape = (max_length, nr_hidden, 3)
     settings = {
         'lr': learn_rate,
         'dropout': dropout,
         'batch_size': batch_size,
-        'nr_epoch': nr_epoch,
+        'num_epochs': num_epochs,
         'tree_truncate': tree_truncate,
         'gru_encode': gru_encode
     }

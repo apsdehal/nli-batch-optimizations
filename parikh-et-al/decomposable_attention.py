@@ -60,6 +60,8 @@ class DecomposableAttention(nn.Module):
         self.aggregate = Aggregate(self.nr_hidden, self.nr_class,
                                    dropout=settings['dropout'])
 
+        init_weights(self)
+
     def forward(self, premise, hypo):
         premise = self.embedding(premise)
         hypo = self.embedding(hypo)
