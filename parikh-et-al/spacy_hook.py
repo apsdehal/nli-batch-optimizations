@@ -1,6 +1,8 @@
 import numpy
 import numpy.random
 import json
+import torch
+
 from spacy.tokens.span import Span
 
 from utils import load_checkpoint
