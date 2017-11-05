@@ -5,4 +5,5 @@ __pycache__
 *.zip
 data/*
 !data/sample.jsonl
-config.json
+config.py
+*.pth.tar

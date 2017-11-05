@@ -3,26 +3,24 @@ import numpy.random
 import json
 from spacy.tokens.span import Span
 
-try:
-    import cPickle as pickle
-except ImportError:
-    import pickle
+from utils import load_checkpoint
+from decomposable_attention import build_model
 
 
 class PyTorchSimilarityShim(object):
     @classmethod
-    def load(cls, path, nlp, get_features=None, max_length=100):
+    def load(cls, path, nlp, shape, settings, get_features=None):
         if get_features is None:
             get_features = get_word_ids
-        with (path / 'config.json').open() as file_:
-            # Read for pytorch
-            # model = model_from_json(file_.read())
-            pass
-        with (path / 'model').open('rb') as file_:
-            weights = pickle.load(file_)
         embeddings = get_embeddings(nlp.vocab)
-        model.set_weights([embeddings] + weights)
-        return cls(model, get_features=get_features, max_length=max_length)
+        model = build_model(embeddings, shape, settings)
+        checkpoint = load_checkpoint(settings['resume'])
+
+        model.load_state_dict(checkpoint['state_dict'])
+
+        return cls(model,
+                   get_features=get_features,
+                   max_length=settings['max_length'])
 
     def __init__(self, model, get_features=None, max_length=100):
         self.model = model
@@ -85,10 +83,13 @@ def get_word_ids(docs, rnn_encode=False, tree_truncate=False,
     return Xs
 
 
-def create_similarity_pipeline(nlp, max_length=100):
+def create_similarity_pipeline(nlp, shape, settings):
     return [
         nlp.tagger,
         nlp.entity,
         nlp.parser,
-        PyTorchSimilarityShim.load(nlp.path / 'similarity', nlp, max_length)
+        PyTorchSimilarityShim.load(nlp.path / 'similarity',
+                                   nlp,
+                                   shape,
+                                   settings)
     ]

@@ -9,16 +9,12 @@ import logging
 import spacy
 
 
-from utils import read_multinli
+from utils import read_multinli, save_checkpoint, load_checkpoint
 from spacy_hook import get_embeddings, get_word_ids
 from spacy_hook import create_similarity_pipeline
 from config import config
 
 from decomposable_attention import build_model
-try:
-    import cPickle as pickle
-except ImportError:
-    import pickle
 
 
 log = logging.getLogger(__name__)
@@ -38,18 +34,10 @@ class NLIDataset(Dataset):
         return self.data[0][key], self.data[1][key], self.labels[key]
 
 
-def train(train_loc, dev_loc, shape, settings):
+def load_data(nlp, train_loc, dev_loc, shape, settings):
     data = read_multinli(train_loc)
     train_premise_text, train_hypo_text, train_labels = data
     dev_premise_text, dev_hypo_text, dev_labels = read_multinli(dev_loc)
-
-    log.debug("Loading spaCy")
-    nlp = spacy.load('en')
-    log.debug("spaCy loaded")
-
-    log.debug("Building model")
-    model = build_model(get_embeddings(nlp.vocab), shape, settings)
-    log.debug("Model built")
 
     log.debug("Generating word vectors")
     data = []
@@ -60,6 +48,7 @@ def train(train_loc, dev_loc, shape, settings):
                     max_length=shape[0],
                     rnn_encode=settings['gru_encode'],
                     tree_truncate=settings['tree_truncate']))
+
     train_premise, train_hypo, dev_premise, dev_hypo = data
     nli_train = NLIDataset((train_premise, train_hypo), train_labels)
     nli_dev = NLIDataset((dev_premise, dev_hypo), dev_labels)
@@ -71,14 +60,43 @@ def train(train_loc, dev_loc, shape, settings):
     dev_loader = DataLoader(dataset=nli_train,
                             shuffle=False,
                             batch_size=settings['batch_size'])
+    return train_loader, dev_loader
+
+
+def train(train_loc, dev_loc, shape, settings):
+    log.debug("Loading spaCy")
+    nlp = spacy.load('en')
+    log.debug("spaCy loaded")
+
+    log.debug("Building model")
+    model = build_model(get_embeddings(nlp.vocab), shape, settings)
+    log.debug("Model built")
+
+    train_loader, dev_loader = load_data(nlp,
+                                         train_loc,
+                                         dev_loc,
+                                         shape,
+                                         settings)
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(filter(lambda p: p.requires_grad,
                                   model.parameters()),
                            lr=settings['lr'])
 
+    start_epoch = 0
+    best_prec = 0
+    if settings['resume']:
+        checkpoint = load_checkpoint(settings['resume'])
+        if checkpoint is not None:
+            start_epoch = checkpoint['epoch']
+            best_prec = checkpoint['best_prec']
+            model.load_state_dict(checkpoint['state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer'])
+
+    is_best = False
+
     log.info("Starting training")
-    for epoch in range(settings['num_epochs']):
+    for epoch in range(start_epoch, settings['num_epochs']):
         for i, (premise, hypo, labels) in enumerate(train_loader):
             premise_batch = Variable(premise.long())
             hypo_batch = Variable(hypo.long())
@@ -91,7 +109,7 @@ def train(train_loc, dev_loc, shape, settings):
 
             if (i + 1) % (settings['batch_size'] * 4) == 0:
                 train_acc = test_model(train_loader, model)
-                vali_acc = test_model(val_loader, model)
+                vali_acc = test_model(dev_loader, model)
                 log.info('Epoch: [{0}/{1}], Step: [{2}/{3}], Loss: {4},' +
                          'Train Acc: {5}, Validation Acc:{6}'
                          .format(epoch + 1,
@@ -101,6 +119,20 @@ def train(train_loc, dev_loc, shape, settings):
                                  loss.data[0],
                                  train_acc,
                                  val_acc))
+        val_acc = test_model(dev_loader, model)
+
+        if val_acc > best_prec:
+            best_prec = val_acc
+            is_best = True
+
+        # TODO remove embeddings from state_dict before saving
+        save_checkpoint({
+            'epoch': epoch + 1,
+            'state_dict': model.state_dict(),
+            'best_prec': best_prec,
+            'optimizer': optimizer.state_dict(),
+        }, is_best)
+        is_best = False
 
 
 def test_model(loader, model):
@@ -109,20 +141,23 @@ def test_model(loader, model):
     total = 0
 
     for premise, hypo, labels in loader:
-        premise_batch, hypo_batch = Variable(premise), Variable(hypo)
-        label_batch = Variable(labels)
+        premise_batch = Variable(premise.long())
+        hypo_batch = Variable(hypo.long())
+        labels_batch = Variable(labels.long())
         output = model(premise_batch, hypo_batch)
         total += 1
-        correct += labels.argmax() == output.argmax()
+        correct += (labels_batch == output.max(1)[1]).data.numpy().sum()
     model.train()
 
     return correct / total * 100
 
 
-def evaluate(dev_loc):
+def evaluate(dev_loc, shape, settings):
     dev_texts1, dev_texts2, dev_labels = read_snli(dev_loc)
     nlp = spacy.load('en',
-                     create_pipeline=create_similarity_pipeline)
+                     create_pipeline=lambda nlp:
+                         create_similarity_pipeline(nlp, shape, settings))
+
     total = 0.
     correct = 0.
     for text1, text2, label in zip(dev_texts1, dev_texts2, dev_labels):
@@ -157,6 +192,7 @@ def demo():
     learn_rate=("Learning rate", "option", "e", float),
     batch_size=("Batch size for neural network training", "option", "b", int),
     num_epochs=("Number of training epochs", "option", "i", int),
+    resume=("Resume training", "option", "r", Path),
     tree_truncate=("Truncate sentences by tree distance", "flag", "T", bool),
     gru_encode=("Encode sentences with bidirectional GRU", "flag", "E", bool),
 )
@@ -168,7 +204,8 @@ def main(mode, train_loc, dev_loc,
          dropout=0.2,
          learn_rate=0.001,
          batch_size=100,
-         num_epochs=5):
+         num_epochs=5,
+         resume=None):
     shape = (max_length, nr_hidden, 3)
     settings = {
         'lr': learn_rate,
@@ -176,12 +213,13 @@ def main(mode, train_loc, dev_loc,
         'batch_size': batch_size,
         'num_epochs': num_epochs,
         'tree_truncate': tree_truncate,
-        'gru_encode': gru_encode
+        'gru_encode': gru_encode,
+        'resume': resume
     }
     if mode == 'train':
         train(train_loc, dev_loc, shape, settings)
     elif mode == 'evaluate':
-        correct, total = evaluate(dev_loc)
+        correct, total = evaluate(dev_loc, shape, settings)
         print(correct, '/', total, correct / total)
     else:
         demo()
