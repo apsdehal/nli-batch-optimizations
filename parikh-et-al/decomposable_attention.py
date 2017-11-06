@@ -11,9 +11,8 @@ def build_model(vectors, shape, settings):
 
     global embedding
     embedding = nn.Embedding(vectors.shape[0],
-                             vectors.shape[1],
-                             max_norm=1,
-                             norm_type=2)
+                             vectors.shape[1])
+
     embedding.weight.data.copy_(torch.from_numpy(vectors))
 
     # Fix weights for training

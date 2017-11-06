@@ -120,18 +120,18 @@ def train(train_loc, dev_loc, shape, settings):
             loss.backward()
             optimizer.step()
 
-            if (i + 1) % (settings['batch_size'] * 4) == 0:
-                train_acc = test_model(train_loader, model)
-                vali_acc = test_model(dev_loader, model)
-                log.info('Epoch: [{0}/{1}], Step: [{2}/{3}], Loss: {4},' +
-                         'Train Acc: {5}, Validation Acc:{6}'
-                         .format(epoch + 1,
-                                 num_epochs,
-                                 i + 1,
-                                 len(nli_train) // settings['batch_size'],
-                                 loss.data[0],
-                                 train_acc,
-                                 val_acc))
+            # if (i + 1) % (settings['batch_size'] * 4) == 0:
+            train_acc = test_model(train_loader, model)
+            val_acc = test_model(dev_loader, model)
+            log.info('Epoch: [{0}/{1}], Step: [{2}/{3}], Loss: {4},' +
+                     'Train Acc: {5}, Validation Acc:{6}'
+                     .format(epoch + 1,
+                             settings['num_epochs'],
+                             i + 1,
+                             len(train_loader) // settings['batch_size'],
+                             loss.data[0],
+                             train_acc,
+                             val_acc))
         val_acc = test_model(dev_loader, model)
 
         if val_acc > best_prec:
