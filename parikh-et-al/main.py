@@ -60,7 +60,7 @@ def load_data(nlp, train_loc, dev_loc, shape, settings):
     train_loader = DataLoader(dataset=nli_train,
                               shuffle=True,
                               batch_size=settings['batch_size'])
-    dev_loader = DataLoader(dataset=nli_train,
+    dev_loader = DataLoader(dataset=nli_dev,
                             shuffle=False,
                             batch_size=settings['batch_size'])
     return train_loader, dev_loader
@@ -107,31 +107,31 @@ def train(train_loc, dev_loc, shape, settings):
         for i, (premise, hypo, labels) in enumerate(train_loader):
             premise_batch = Variable(premise.long())
             hypo_batch = Variable(hypo.long())
-            label_batch = Variable(labels)
+            labels_batch = Variable(labels)
 
             if cuda_available:
                 premise_batch = premise_batch.cuda()
                 hypo_batch = hypo_batch.cuda()
-                label_batch = label_batch.cuda()
+                labels_batch = labels_batch.cuda()
 
             optimizer.zero_grad()
             output = model(premise_batch, hypo_batch)
-            loss = criterion(output, label_batch.long())
+            loss = criterion(output, labels_batch.long())
             loss.backward()
             optimizer.step()
 
-            # if (i + 1) % (settings['batch_size'] * 4) == 0:
-            train_acc = test_model(train_loader, model)
-            val_acc = test_model(dev_loader, model)
-            log.info('Epoch: [{0}/{1}], Step: [{2}/{3}], Loss: {4},' +
-                     'Train Acc: {5}, Validation Acc:{6}'
-                     .format(epoch + 1,
-                             settings['num_epochs'],
-                             i + 1,
-                             len(train_loader) // settings['batch_size'],
-                             loss.data[0],
-                             train_acc,
-                             val_acc))
+            if (i + 1) % (settings['batch_size'] * 4) == 0:
+                train_acc = test_model(train_loader, model)
+                val_acc = test_model(dev_loader, model)
+                log.info(('Epoch: [{0}/{1}], Step: [{2}/{3}], Loss: {4},' +
+                         'Train Acc: {5}, Validation Acc:{6}')
+                         .format(epoch + 1,
+                                 settings['num_epochs'],
+                                 i + 1,
+                                 len(train_loader) // settings['batch_size'],
+                                 loss.data[0],
+                                 train_acc,
+                                 val_acc))
         val_acc = test_model(dev_loader, model)
 
         if val_acc > best_prec:
@@ -161,11 +161,11 @@ def test_model(loader, model):
         if cuda_available:
             premise_batch = premise_batch.cuda()
             hypo_batch = hypo_batch.cuda()
-            label_batch = label_batch.cuda()
+            labels_batch = labels_batch.cuda()
 
         output = model(premise_batch, hypo_batch)
-        total += 1
-        correct += (labels_batch == output.max(1)[1]).data.numpy().sum()
+        total += len(labels_batch)
+        correct += (labels_batch == output.max(1)[1]).data.cpu().numpy().sum()
     model.train()
 
     return correct / total * 100

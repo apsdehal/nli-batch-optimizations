@@ -10,6 +10,7 @@ PROJECTION_DIM = 200
 def build_model(vectors, shape, settings):
 
     global embedding
+    # Later include max_norm=1, norm_type=2 when pytorch release happens
     embedding = nn.Embedding(vectors.shape[0],
                              vectors.shape[1])
 
