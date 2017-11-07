@@ -122,20 +122,20 @@ def train(train_loc, dev_loc, shape, settings):
 
             if (i + 1) % (settings['batch_size'] * 4) == 0:
                 train_acc = test_model(train_loader, model)
-                val_acc = test_model(dev_loader, model)
+                dev_acc = test_model(dev_loader, model)
                 log.info(('Epoch: [{0}/{1}], Step: [{2}/{3}], Loss: {4},' +
                          'Train Acc: {5}, Validation Acc:{6}')
                          .format(epoch + 1,
                                  settings['num_epochs'],
                                  i + 1,
-                                 len(train_loader) // settings['batch_size'],
+                                 len(train_loader),
                                  loss.data[0],
                                  train_acc,
-                                 val_acc))
-        val_acc = test_model(dev_loader, model)
+                                 dev_acc))
+        dev_acc = test_model(dev_loader, model)
 
-        if val_acc > best_prec:
-            best_prec = val_acc
+        if dev_acc > best_prec:
+            best_prec = dev_acc
             is_best = True
 
         # TODO remove embeddings from state_dict before saving
@@ -213,7 +213,8 @@ def demo():
     num_epochs=("Number of training epochs", "option", "i", int),
     tree_truncate=("Truncate sentences by tree distance", "flag", "T", bool),
     gru_encode=("Encode sentences with bidirectional GRU", "flag", "E", bool),
-    resume=("Resume training", "option", "r", Path),
+    resume=("Resume training", "option", "r", str),
+    seed=("Seed for training", "option", "s", int)
 )
 def main(mode, train_loc, dev_loc,
          tree_truncate=False,
@@ -222,9 +223,12 @@ def main(mode, train_loc, dev_loc,
          nr_hidden=300,
          dropout=0.2,
          learn_rate=0.001,
+         seed=7,
          batch_size=100,
          num_epochs=5,
          resume=None):
+
+    torch.manual_seed(seed)
     shape = (max_length, nr_hidden, 3)
     settings = {
         'lr': learn_rate,

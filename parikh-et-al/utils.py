@@ -26,11 +26,15 @@ def read_multinli(path):
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
     torch.save(state, filename)
+    epoch = state['epoch']
+    if epoch % 50 == 0 and epoch != 0:
+        shutil.copyfile(filename, 'model_' + str(epoch) + '.pth.tar')
     if is_best:
         shutil.copyfile(filename, 'model_best.pth.tar')
 
 
 def load_checkpoint(resume):
+    print(resume)
     if os.path.isfile(resume):
         print("=> loading checkpoint '{}'".format(resume))
         checkpoint = torch.load(resume)
