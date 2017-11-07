@@ -38,11 +38,14 @@ def get_embedded_mask(embedded):
 class DecomposableAttention(nn.Module):
     def __init__(self, shape, settings):
         super(DecomposableAttention, self).__init__()
+
         global embedding
+
         self.embedding = embedding
         self.settings = settings
         self.max_length, self.nr_hidden, self.nr_class = shape
         self.projection = nn.Linear(self.nr_hidden, PROJECTION_DIM)
+
         settings['nr_hidden'] = PROJECTION_DIM
         self.nr_hidden = PROJECTION_DIM
 
@@ -104,6 +107,31 @@ class DecomposableAttention(nn.Module):
         scores = self.aggregate(aggregate_input)
 
         return scores
+
+
+class BiRNNEncoder(nn.Module):
+    def __init__(self, max_length, nr_hidden, dropout=0.0):
+        super(BiRNNEncoder, self).__init__()
+
+        self.nr_hidden = nr_hidden
+
+        self.fully_connected = nn.Sequential(
+            nn.Linear(nr_hidden * 2, nr_hidden),
+            nn.ReLU()
+        )
+
+        self.lstm = nn.LSTM(nr_hidden, nr_hidden, max_length,
+                            dropout=dropout,
+                            bidirectional=True,
+                            batch_first=True)
+        self.fully_connected = TimeDistributed(self.fully_connected)
+        self.dropout = nn.Dropout(p=dropout)
+
+        init_weights(self)
+
+    def forward(self, input):
+        output, _ = self.lstm(input)
+        return self.dropout(self.fully_connected(output))
 
 
 class Attention(nn.Module):
