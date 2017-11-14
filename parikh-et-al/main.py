@@ -120,20 +120,24 @@ def train(train_loc, dev_loc, shape, settings):
             loss = criterion(output, labels_batch.long())
             loss.backward()
             optimizer.step()
-
             if (i + 1) % (settings['batch_size'] * 4) == 0:
-                train_acc = test_model(train_loader, model)
-                dev_acc = test_model(dev_loader, model)
-                log.info(('Epoch: [{0}/{1}], Step: [{2}/{3}], Loss: {4},' +
-                         'Train Acc: {5}, Validation Acc:{6}')
+                log.info(('Epoch: [{0}/{1}], Step: [{2}/{3}], Loss: {4},')
                          .format(epoch + 1,
                                  settings['num_epochs'],
                                  i + 1,
                                  len(train_loader),
-                                 loss.data[0],
-                                 train_acc,
-                                 dev_acc))
-        dev_acc = test_model(dev_loader, model)
+                                 loss.data[0]))
+        train_acc, train_loss = test_model(train_loader, model)
+        dev_acc, dev_loss = test_model(dev_loader, model)
+        log.info(('Finished Epoch: [{0}/{1}], Avg Train Loss: {2}, ' +
+                  'Avg Val Loss: {3}, ' +
+                  'Train Acc: {4}, Validation Acc:{5}')
+                 .format(epoch + 1,
+                         settings['num_epochs'],
+                         train_loss,
+                         dev_loss,
+                         train_acc,
+                         dev_acc))
 
         if dev_acc > best_prec:
             best_prec = dev_acc
@@ -153,10 +157,11 @@ def test_model(loader, model):
     model.eval()
     correct = 0
     total = 0
+    total_loss = 0
 
     for premise, hypo, labels in loader:
-        premise_batch = Variable(premise.long())
-        hypo_batch = Variable(hypo.long())
+        premise_batch = Variable(premise.long(), volatile=True)
+        hypo_batch = Variable(hypo.long(), volatile=True)
         labels_batch = Variable(labels.long())
 
         if cuda_available:
@@ -165,11 +170,14 @@ def test_model(loader, model):
             labels_batch = labels_batch.cuda()
 
         output = model(premise_batch, hypo_batch)
+        loss = nn.functional.cross_entropy(output, labels_batch.long())
+        total_loss += len(premise_batch) * loss.data
         total += len(labels_batch)
         correct += (labels_batch == output.max(1)[1]).data.cpu().numpy().sum()
     model.train()
 
-    return correct / total * 100
+    average_loss = total_loss[0] / total
+    return correct / total * 100, average_loss
 
 
 def evaluate(dev_loc, shape, settings):
