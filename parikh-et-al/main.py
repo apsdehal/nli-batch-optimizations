@@ -95,6 +95,7 @@ def train(train_loc, dev_loc, shape, settings):
             best_prec = checkpoint['best_prec']
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
+            log.info("Best accuracy in loaded model is: %d" % best_prec)
 
     is_best = False
 

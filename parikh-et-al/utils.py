@@ -4,7 +4,9 @@ import json
 import torch
 import os
 import shutil
+import logging
 
+log = logging.getLogger(__name__)
 LABELS = {'entailment': 0, 'contradiction': 1, 'neutral': 2}
 
 
@@ -27,20 +29,22 @@ def read_multinli(path):
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
     torch.save(state, filename)
     epoch = state['epoch']
+    log.info("=> Saving model to %s" % filename)
     if epoch % 50 == 0 and epoch != 0:
         shutil.copyfile(filename, 'model_' + str(epoch) + '.pth.tar')
     if is_best:
+        log.info("=> The model just saved has performed best on validation set" +
+                 " till now")
         shutil.copyfile(filename, 'model_best.pth.tar')
 
 
 def load_checkpoint(resume):
-    print(resume)
     if os.path.isfile(resume):
-        print("=> loading checkpoint '{}'".format(resume))
+        log.info("=> loading checkpoint '{}'".format(resume))
         checkpoint = torch.load(resume)
-        print("=> loaded checkpoint '{}' (epoch {})"
-              .format(resume, checkpoint['epoch']))
+        log.info("=> loaded checkpoint '{}' (epoch {})"
+                 .format(resume, checkpoint['epoch']))
         return checkpoint
     else:
-        print("=> no checkpoint found at '{}'".format(resume))
+        log.info("=> no checkpoint found at '{}'".format(resume))
         return None
