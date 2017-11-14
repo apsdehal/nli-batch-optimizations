@@ -7,7 +7,10 @@ multinli_1.0
 *.pdf
 __MACOSX
 *.zip
-data/*
+*/data/*
 !data/sample.jsonl
 config.py
 *.pth.tar
+.ipynb_checkpoints/
+.idea
+chen-et-al-2017/word_sequence/*
