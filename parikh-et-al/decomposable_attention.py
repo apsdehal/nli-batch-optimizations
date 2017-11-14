@@ -53,6 +53,14 @@ class DecomposableAttention(nn.Module):
             self.encoder = BiRNNEncoder(self.max_length, self.nr_hidden,
                                         dropout=settings['dropout'])
 
+        self.intra_sentence_attender = Attention(self.max_length,
+                                                 self.nr_hidden,
+                                                 dropout=settings['dropout'])
+
+        self.intra_align = SoftAlignment(self.max_length, self.nr_hidden)
+        self.intra_align_project = nn.Linear(self.nr_hidden * 2,
+                                             PROJECTION_DIM)
+
         self.attender = Attention(self.max_length, self.nr_hidden,
                                   dropout=settings['dropout'])
 
@@ -78,6 +86,13 @@ class DecomposableAttention(nn.Module):
         if self.settings['gru_encode']:
             premise = self.encoder(premise)
             hypo = self.encoder(hypo)
+
+        # Intra Sentence Attention
+        premise = self.intra_attention(premise)
+        hypo = self.intra_attention(hypo)
+
+        premise = self.intra_align_project(premise)
+        hypo = self.intra_align_project(hypo)
 
         projected_premise = self.attender(premise)
         projected_hypo = self.attender(hypo)
@@ -107,6 +122,16 @@ class DecomposableAttention(nn.Module):
         scores = self.aggregate(aggregate_input)
 
         return scores
+
+    def intra_attention(self, sentence):
+        projected_sentence = self.intra_sentence_attender(sentence)
+        intra_att_ji = projected_sentence.bmm(projected_sentence.permute(0, 2,
+                                                                         1))
+        intra_att_ij = intra_att_ji.permute(0, 1, 2)
+        aligned_sentence = self.intra_align(sentence, intra_att_ij)
+        sentence = torch.cat([sentence, aligned_sentence], dim=-1)
+
+        return sentence
 
 
 class BiRNNEncoder(nn.Module):
