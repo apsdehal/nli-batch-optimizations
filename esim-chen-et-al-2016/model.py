@@ -47,12 +47,20 @@ class ESIM(nn.Module):
             idx = Variable(torch.LongTensor(idx))
         inverted_tensor = tensor.index_select(0, idx)
         return inverted_tensor
-    def bmm(self,a,b):
-        new_tensor=[]
-        for i in range(0,a.size(0)):
-            new_tensor.append(torch.matmul(a[i],b[i]).unsqueeze(0))
-        new_tensor=torch.cat(new_tensor,0)
-        return new_tensor
+
+
+    def softmax(self,input, axis=1):
+        input_size = input.size()
+
+        trans_input = input.transpose(axis, len(input_size) - 1)
+        trans_size = trans_input.size()
+
+        input_2d = trans_input.contiguous().view(-1, trans_size[-1])
+
+        soft_max_2d = F.softmax(input_2d)
+
+        soft_max_nd = soft_max_2d.view(*trans_size)
+        return soft_max_nd.transpose(axis, len(input_size) - 1)
     def forward(self, x1, x1_mask, x2, x2_mask,l):
         n_timesteps_premise = x1.size(0)
         n_timesteps_hypothesis = x2.size(0)
@@ -62,25 +70,23 @@ class ESIM(nn.Module):
         #xr1_mask=self.reverseTensor(x1_mask)
         xr2=self.reverseTensor(x2)
         #xr2_mask=self.reverseTensor(x2_mask)
-
         emb1=self.dropout(self.embed(x1))
         #embr1=self.reverseTensor(emb1)
         emb2=self.dropout(self.embed(x2))
         #embr2=self.reverseTensor(emb2)
-
         ctx1=self.BiLSTM_encoder(emb1,x1_mask)
         ctx2=self.BiLSTM_encoder(emb2,x2_mask)
 
         #Alignment layer
-        weight_matrix = self.bmm(ctx1.permute(1,0,2), ctx2.permute(1,2,0))
+        weight_matrix = torch.matmul(ctx1.permute(1,0,2), ctx2.permute(1,2,0))
         weight_matrix_1 = torch.exp(weight_matrix - torch.max(weight_matrix,1, keepdim=True)[0] ).permute(1,2,0)
         weight_matrix_2 = torch.exp(weight_matrix - torch.max(weight_matrix,2, keepdim=True)[0]).permute(1,2,0)
 
         weight_matrix_1 = weight_matrix_1 * x1_mask.unsqueeze(1)
         weight_matrix_2 = weight_matrix_2 * x2_mask.unsqueeze(0)
         alpha = weight_matrix_1 / weight_matrix_1.sum(0, keepdim=True)
-        beta = weight_matrix_2 / weight_matrix_2.sum(1, keepdim=True)
 
+        beta = weight_matrix_2 / weight_matrix_2.sum(1, keepdim=True)
         ctx2_ = (ctx1.unsqueeze(1) * alpha.unsqueeze(3)).sum(0)
         ctx1_ = (ctx2.unsqueeze(0) * beta.unsqueeze(3)).sum(1)
 
@@ -92,6 +98,7 @@ class ESIM(nn.Module):
 
         ctx3=self.BiLSTM_decoder(inp1)
         ctx4=self.BiLSTM_decoder(inp2)
+
         logit1 = (ctx3 * x1_mask.unsqueeze(2)).sum(0) / x1_mask.sum(0).unsqueeze(1)
         logit2 = (ctx3 * x1_mask.unsqueeze(2)).max(0)[0]
         logit3 = (ctx4 * x2_mask.unsqueeze(2)).sum(0) / x2_mask.sum(0).unsqueeze(1)
@@ -100,8 +107,8 @@ class ESIM(nn.Module):
         logit=self.dropout(logit)
         logit=self.dropout(F.tanh(self.fc2(logit)))
         logit=self.fc_op(logit)
-        probs=F.softmax(logit)
-        return probs
+        #probs=F.softmax(logit)
+        return logit
 
     def BiLSTM_encoder(self,x,mask):
         b=x.size()[1]
@@ -134,4 +141,15 @@ class ESIM(nn.Module):
         _,(projr,_)=self.LSTM_decoder_rev(xr,(hr0,cr0))
         ctx=torch.cat((proj[0],self.reverseTensor(projr[0])),1)
         return ctx
+
+    '''def masked_softmax(self,scores, mask):
+        """
+        Used to calculcate a softmax score with true sequence length (without padding), rather than max-sequence length.
+        Input shape: (batch_size, max_seq_length, hidden_dim).
+        mask parameter: Tensor of shape (batch_size, max_seq_length). Such a mask is given by the length() function.
+        """
+        numerator = torch.exp(torch.subtract(scores, tf.reduce_max(scores, 1, keep_dims=True))) * mask
+        denominator = tf.reduce_sum(numerator, 1, keep_dims=True)
+        weights = tf.div(numerator, denominator)
+        return weights'''
 
