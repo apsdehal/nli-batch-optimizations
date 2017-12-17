@@ -32,6 +32,12 @@ Check respective model's folder's README to run and train that model.
 
 Check each model's respective folder to find link to pretrained models. 
 
+## Results
+
+Following table shows the results obtained:
+
+![Results](https://i.imgur.com/etEUOvZ.png)
+
 ## LICENSE
 
 MIT
