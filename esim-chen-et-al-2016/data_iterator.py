@@ -30,7 +30,8 @@ class TextIterator:
         self.target_buffer = []
         self.label_buffer = []
         self.k = batch_size * 20
-
+        #self.prevent=100000
+        #self.stop=0
     def __iter__(self):
         return self
 
@@ -138,7 +139,10 @@ class TextIterator:
                     break
         except IOError:
             self.end_of_data = True
-
+        #self.stop+=self.batch_size
+        #if self.stop>=self.prevent:
+            #self.end_of_data = True
+            #self.stop=0
         if len(source) <= 0 or len(target) <= 0 or len(label) <= 0:
             self.end_of_data = False
             self.reset()

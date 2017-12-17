@@ -8,7 +8,7 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 from model import ESIM
-from data_iterator import TextIterator
+from batch_iterator import TextIterator
 import time
 import os
 import torch.optim as optim
@@ -19,21 +19,20 @@ dim_word=300 # word vector dimensionality
 dim=300  # the number of GRU units
 encoder='lstm'  # encoder model
 decoder='lstm' # decoder model
-patience=6 # early stopping patience
-max_epochs=20
+patience=3 # early stopping patience
+max_epochs=40
 finish_after=10000000  # finish after this many updates
 decay_c=0.  # L2 regularization penalty
 clip_c=10.0  # gradient clipping threshold
-lrate=0.00008 # learning rate
-n_words=42394  # vocabulary size
+lrate=0.0002 # learning rate
+n_words=100140  # vocabulary size
 maxlen=100  # maximum length of the description
-optimizer_spec='adadelta'
-batch_size=32
-valid_batch_size=32
+batch_size=64
+valid_batch_size=64
 saveto=''
 dispFreq=10000
 validFreq=1000
-saveFreq=1  # save the parameters after every saveFreq updates
+saveFreq=3 # save the parameters after every saveFreq updates
 use_dropout=True
 reload_=True
 verbose=False  # print verbose information for debug but slow speed
@@ -118,7 +117,9 @@ def pred_acc(iterator):
     valid_acc = 0
     n_done = 0
     num_times = 10
-
+    ce_loss = nn.CrossEntropyLoss()
+    n=0
+    tot_loss=0
     for x1, x2, y in iterator:
         n_done += len(x1)
         tp1 = time.time()
@@ -126,9 +127,13 @@ def pred_acc(iterator):
         tp2 = time.time()
 
         outputs = model(premise, premise_mask, hypothesis, hypothesis_mask, l)
+        loss = ce_loss(outputs, l)
         valid_acc += (outputs.max(1)[1] == l).sum().data[0]
+        n+=1
+        tot_loss+=loss.data[0]
     valid_acc = 1.0 * valid_acc / n_done
-    return valid_acc
+    avg_loss=tot_loss/n
+    return valid_acc,avg_loss
 
 print 'Optimization'
 optimizer = optim.Adam(model.parameters(), lr=lrate)
@@ -157,16 +162,19 @@ best_acc=0.
 bad_ctr=0
 for epoch in range(max_epochs):
     train(epoch)
-    acc=pred_acc(valid_set)
+
+    acc,l=pred_acc(valid_set)
     logger.debug('Epoch ' + str(epoch) + ' Valid Accuracy = ' + str(acc))
     if acc>best_acc:
         best_acc=acc
         checkpoint_valid(epoch)
-    else:
+    '''else:
         bad_ctr+=1
     if bad_ctr==patience:
         lrate*=0.5
         optimizer = optim.Adam(model.parameters(), lr=lrate)
-        bad_ctr=0
+        bad_ctr=0'''
     if epoch % saveFreq ==0:
+        acc,l = pred_acc(train_set)
+        logger.debug('Epoch ' + str(epoch) + ' Train Accuracy = ' + str(acc))
         checkpoint(epoch)

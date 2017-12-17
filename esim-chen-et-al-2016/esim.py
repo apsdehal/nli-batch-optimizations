@@ -47,7 +47,7 @@ def train(
     encoder='lstm',  # encoder model
     decoder='lstm',  # decoder model
     patience=10,  # early stopping patience
-    max_epochs=10,
+    max_epochs=5000,
     finish_after=10000000,  # finish after this many updates
     decay_c=0.,  # L2 regularization penalty
     clip_c=10.0,  # gradient clipping threshold
@@ -154,20 +154,11 @@ def train(
         saveFreq = len(train_set[0]) / batch_size
 
     uidx = 0
-    estop = False
+
     prev_losses = []
-    best_epoch_num = 0
-    lr_change_list = []
-    wait_counter = 0
-    wait_N = 6
+
     best_acc = 0.
-    fc1=[]
-    fc2=[]
-    fc_op=[]
-    le=[]
-    ler=[]
-    ld=[]
-    ldr=[]
+
     for eidx in xrange(max_epochs):
         n_samples = 0
         total_epoch_loss = 0
@@ -181,7 +172,7 @@ def train(
                 print 'Minibatch with zero sample under length ', maxlen
                 uidx -= 1
                 continue'''
-            model.zero_grad()
+            #model.zero_grad()
             optimizer.zero_grad()
             ud_start = time.time()
             outputs = model(x1, x1_mask, x2, x2_mask, y)
@@ -191,71 +182,21 @@ def train(
             if clip_c > 0:
                 torch.nn.utils.clip_grad_norm(model.parameters(), clip_c)
             optimizer.step()
-            print(optimizer.state_dict())
-            '''if len(fc1)==0:
-                fc1=model.fc1.weight.data.cpu().numpy()
-                fc2 = model.fc2.weight.data.cpu().numpy()
-                fc_op= model.fc_op.weight.data.cpu().numpy()
-                le = model.LSTM_encoder.weight_ih_l0.data.cpu().numpy()
-                ler = model.LSTM_encoder_rev.weight_ih_l0.data.cpu().numpy()
-                ld = model.LSTM_decoder.weight_ih_l0.data.cpu().numpy()
-                ldr = model.LSTM_decoder_rev.weight_ih_l0.data.cpu().numpy()
-            else:
-                d=fc1-model.fc1.weight.data.cpu().numpy()
-                logger.debug("change in fc1 max min: "+str(np.max(d.flatten()))+str(np.min(d.flatten())))
-                fc1=model.fc1.weight.data.cpu().numpy()
-                d = fc2 - model.fc2.weight.data.cpu().numpy()
-                logger.debug("change in fc2 max min: " +str(np.max(d.flatten()))+str(np.min(d.flatten())))
-                fc2=model.fc2.weight.data.cpu().numpy()
-                d = fc_op - model.fc_op.weight.data.cpu().numpy()
-                logger.debug("change in fc_op max min: "+str(np.max(d.flatten()))+str(np.min(d.flatten())))
-                fc_op=model.fc_op.weight.data.cpu().numpy()
-                d = le - model.LSTM_encoder.weight_ih_l0.data.cpu().numpy()
-                logger.debug("change in le max min: " +str(np.max(d.flatten()))+str(np.min(d.flatten())))
-                le = model.LSTM_encoder.weight_ih_l0.data.cpu().numpy()
-                d = ler - model.LSTM_encoder_rev.weight_ih_l0.data.cpu().numpy()
-                logger.debug("change in ler max min: " +str(np.max(d.flatten()))+str(np.min(d.flatten())))
-                ler = model.LSTM_encoder_rev.weight_ih_l0.data.cpu().numpy()
-                d = ld - model.LSTM_decoder.weight_ih_l0.data.cpu().numpy()
-                logger.debug("change in ld max min: " +str(np.max(d.flatten()))+str(np.min(d.flatten())))
-                ld = model.LSTM_decoder.weight_ih_l0.data.cpu().numpy()
-                d = ldr - model.LSTM_decoder_rev.weight_ih_l0.data.cpu().numpy()
-                logger.debug("change in ldr max min: " +str(np.max(d.flatten()))+str(np.min(d.flatten())))
-                ldr = model.LSTM_decoder_rev.weight_ih_l0.data.cpu().numpy()'''
 
-            ud = time.time() - ud_start
-        if eidx % saveFreq == 0:
-            logger.debug("Saving at iteration: " + str(uidx))
-            checkpoint(eidx)
-        '''scheduler.step(total_epoch_loss)
-        if(total_epoch_loss >= prev_losses[-wait_N:].max()):
-            #lrate*=0.5
-            bad_counter+=1
-            if(bad_counter==patience):
-                logger.debug("Early stopping!!")
-                break'''
         logger.debug("Epoch: " + str(eidx) + " Loss: " + str(total_epoch_loss))
         if (len(prev_losses[-patience:]) > patience):
             if (total_epoch_loss >= max(prev_losses[-patience:])):
                 logger.debug("Early stopping!!")
                 break
         prev_losses.append(total_epoch_loss)
-        t_acc = pred_acc(train_set)
-        logger.debug('Epoch ' + str(eidx) + ' Train Accuracy = ' + str(t_acc))
         valid_acc = pred_acc(valid_set)
         logger.debug('Epoch ' + str(eidx) + ' Valid Accuracy = ' + str(valid_acc))
-        test_acc = pred_acc(test_set)
-        logger.debug('Epoch ' + str(eidx) + ' Test Accuracy = ' + str(test_acc))
+
         if (valid_acc > best_acc):
             best_acc = valid_acc
             checkpoint_valid(eidx)
 
         # logger.debug("Updating epoch "+str(eidx)+" with loss "+str(total_epoch_loss))
-    '''with open('record.csv', 'w') as f:
-        f.write(str(best_epoch_num) + '\n')
-        f.write(','.join(map(str,lr_change_list)) + '\n')
-        f.write(','.join(map(str,valid_acc_record)) + '\n')'''
-
 
 # In[6]:
 
@@ -269,7 +210,7 @@ train(
     n_words=42394,
     decay_c=0.,
     clip_c=10.,
-    lrate=0.0004,
+    lrate=0.00008,
     optimizer_spec='adam',
     maxlen=100,
     batch_size=32,

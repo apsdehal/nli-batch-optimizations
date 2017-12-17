@@ -77,18 +77,59 @@ class ESIM(nn.Module):
         ctx1=self.BiLSTM_encoder(emb1,x1_mask)
         ctx2=self.BiLSTM_encoder(emb2,x2_mask)
 
-        #Alignment layer
-        weight_matrix = torch.matmul(ctx1.permute(1,0,2), ctx2.permute(1,2,0))
-        weight_matrix_1 = torch.exp(weight_matrix - torch.max(weight_matrix,1, keepdim=True)[0] ).permute(1,2,0)
-        weight_matrix_2 = torch.exp(weight_matrix - torch.max(weight_matrix,2, keepdim=True)[0]).permute(1,2,0)
+        ctx1=ctx1.permute(1,0,2)
+        ctx2 = ctx2.permute(1, 0, 2)
+        premise_list = list(torch.split(ctx1, split_size=1,dim=1))
+        premise_list =[p.squeeze(1) for p in premise_list]
+        hypothesis_list = list(torch.split(ctx2, split_size=1,dim=1))
+        hypothesis_list = [h.squeeze(1) for h in hypothesis_list]
+        scores_all = []
+        premise_attn = []
+        alphas = []
+        for i in range(n_timesteps_premise):
+            scores_i_list = []
+            for j in range(n_timesteps_hypothesis):
+                score_ij = torch.max(torch.mul(premise_list[i], hypothesis_list[j]), 1, keepdim=True)[0]
+                scores_i_list.append(score_ij)
 
-        weight_matrix_1 = weight_matrix_1 * x1_mask.unsqueeze(1)
-        weight_matrix_2 = weight_matrix_2 * x2_mask.unsqueeze(0)
-        alpha = weight_matrix_1 / weight_matrix_1.sum(0, keepdim=True)
+            scores_i = torch.stack(scores_i_list, 1)
+            #print("sci",scores_i_list[0].size(),scores_i.size())
+            alpha_i = self.masked_softmax(scores_i, x2_mask)
+            a_tilde_i = torch.max(torch.mul(alpha_i, ctx2), 1)[0]
+            premise_attn.append(a_tilde_i)
 
-        beta = weight_matrix_2 / weight_matrix_2.sum(1, keepdim=True)
-        ctx2_ = (ctx1.unsqueeze(1) * alpha.unsqueeze(3)).sum(0)
-        ctx1_ = (ctx2.unsqueeze(0) * beta.unsqueeze(3)).sum(1)
+            scores_all.append(scores_i)
+            alphas.append(alpha_i)
+
+        scores_stack = torch.stack(scores_all, 2)
+        #print("scall",scores_all[0].size(),scores_stack.size())
+        scores_list = list(torch.split(scores_stack, split_size=1,dim=1))
+        scores_list = [s.squeeze(1) for s in scores_list]
+        #print("sl",scores_list[0].size())
+        hypothesis_attn = []
+        betas = []
+        for j in range(len(scores_list)):
+            scores_j = scores_list[j]
+            beta_j = self.masked_softmax(scores_j, x1_mask)
+            #print("beta_j",beta_j.size())
+            b_tilde_j = torch.sum(torch.mul(beta_j, ctx1), 1)
+            #print("b_tilde_j",b_tilde_j.size())
+            hypothesis_attn.append(b_tilde_j)
+
+            betas.append(beta_j)
+
+        #print(premise_attn[0].size(),hypothesis_attn[0].size())
+        # Make attention-weighted sentence representations into one tensor,
+        premise_attn=[p.unsqueeze(1) for p in premise_attn]
+        hypothesis_attn=[h.unsqueeze(1) for h in hypothesis_attn]
+
+        ctx1_ = torch.cat(premise_attn, 1)
+        ctx2_ = torch.cat(hypothesis_attn, 1)
+        #print(ctx2_.size())
+        ctx1 = ctx1.permute(1, 0, 2)
+        ctx2 = ctx2.permute(1, 0, 2)
+        ctx1_ = ctx1_.permute(1, 0, 2)
+        ctx2_ = ctx2_.permute(1, 0, 2)
 
         inp1 = torch.cat([ctx1, ctx1_, ctx1*ctx1_, ctx1-ctx1_], 2)
         inp2 = torch.cat([ctx2, ctx2_, ctx2*ctx2_, ctx2-ctx2_], 2)
@@ -142,14 +183,19 @@ class ESIM(nn.Module):
         ctx=torch.cat((proj[0],self.reverseTensor(projr[0])),1)
         return ctx
 
-    '''def masked_softmax(self,scores, mask):
+
+    def masked_softmax(self,scores, mask):
         """
         Used to calculcate a softmax score with true sequence length (without padding), rather than max-sequence length.
         Input shape: (batch_size, max_seq_length, hidden_dim).
         mask parameter: Tensor of shape (batch_size, max_seq_length). Such a mask is given by the length() function.
         """
-        numerator = torch.exp(torch.subtract(scores, tf.reduce_max(scores, 1, keep_dims=True))) * mask
-        denominator = tf.reduce_sum(numerator, 1, keep_dims=True)
-        weights = tf.div(numerator, denominator)
-        return weights'''
+        x=torch.exp((scores - torch.max(scores, 1, keepdim=True)[0])).squeeze()
+        y=mask.permute(1,0)
+        numerator = torch.mul(x,y).unsqueeze(2)
+        #print("x,y",x.size(),y.size())
+        #print("n",numerator.size())
+        denominator = torch.sum(numerator, 1, keepdim=True)
+        weights = torch.div(numerator, denominator)
+        return weights
 
