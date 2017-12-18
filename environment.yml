@@ -1,20 +1,23 @@
 name: nlu-project
 channels:
     - conda-forge
-    - soumith
+    - pytorch
     - defaults
 dependencies:
     - python=3.6.0
     - numpy
     - matplotlib
+    - nltk
     - jupyter
     - jupyter_contrib_nbextensions
     - pytorch
     - cuda80
     - torchvision
-    - spacy
     - pip
     - pip:
         - plac
         - ujson
         - jsonlines
+        - git+https://github.com/pytorch/text
+        - git+https://github.com/lanpa/tensorboard-pytorch
+
