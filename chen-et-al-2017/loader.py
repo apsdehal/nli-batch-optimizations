@@ -158,21 +158,21 @@ def formatDataToIndexRepresentationForBatchProcessing(data):
 
 
 
-def load_data(train_loc, dev_loc, test_loc):
+def load_data(train_loc, dev_loc, valid_out_domain_loc):
     train_premise_text, train_hypo_text, train_labels = read_multinli(train_loc)
     dev_premise_text, dev_hypo_text, dev_labels = read_multinli(dev_loc)
-    test_premise_text, test_hypo_text, test_labels = read_multinli(test_loc)
+    valid_out_domain_premise_text, valid_out_domain_hypo_text, valid_out_domain_labels = read_multinli(valid_out_domain_loc)
 
     train_premise, train_hypo, train_labels = formatDataToIndexRepresentation(train_premise_text, train_hypo_text,
                                                                               train_labels)
     dev_premise, dev_hypo, dev_labels = formatDataToIndexRepresentation(dev_premise_text, dev_hypo_text,
                                                                         dev_labels)
-    test_premise, test_hypo, test_labels = formatDataToIndexRepresentation(test_premise_text, test_hypo_text,
-                                                                        test_labels)
+    valid_out_domain_premise, valid_out_domain_hypo, valid_out_domain_labels = formatDataToIndexRepresentation(valid_out_domain_premise_text, valid_out_domain_hypo_text,
+                                                                        valid_out_domain_labels)
 
     nli_train = NLIDataset((train_premise, train_hypo), train_labels)
     nli_dev = NLIDataset((dev_premise, dev_hypo), dev_labels)
-    nli_test = NLIDataset((test_premise, test_hypo), test_labels)
+    nli_valid_out_domain = NLIDataset((valid_out_domain_premise, valid_out_domain_hypo), valid_out_domain_labels)
 
     train_loader = DataLoader(dataset=nli_train,
                               shuffle=True,
@@ -182,24 +182,24 @@ def load_data(train_loc, dev_loc, test_loc):
                             shuffle=False,
                             collate_fn=prepare_data,
                             batch_size=batch_size)
-    test_loader = DataLoader(dataset=nli_test,
+    valid_out_domain_loader = DataLoader(dataset=nli_valid_out_domain,
                             shuffle=False,
                             collate_fn=prepare_data,
                             batch_size=batch_size)
-    return train_loader, dev_loader, test_loader
+    return train_loader, dev_loader, valid_out_domain_loader
 
-def load_data_for_batch_processing(train_loc, dev_loc, test_loc):
+def load_data_for_batch_processing(train_loc, dev_loc, valid_out_domain_loc):
     train_data = read_multinliForBatchProcessing(train_loc)
     dev_data = read_multinliForBatchProcessing(dev_loc)
-    test_data = read_multinliForBatchProcessing(test_loc)
+    valid_out_domain_data = read_multinliForBatchProcessing(valid_out_domain_loc)
 
     train_indexed_data = formatDataToIndexRepresentationForBatchProcessing(train_data)
     dev_indexed_data = formatDataToIndexRepresentationForBatchProcessing(dev_data)
-    test_indexed_data = formatDataToIndexRepresentationForBatchProcessing(test_data)
+    valid_out_domain_indexed_data = formatDataToIndexRepresentationForBatchProcessing(valid_out_domain_data)
 
     nli_train = BatchedNLIDataset(train_indexed_data)
     nli_dev = BatchedNLIDataset(dev_indexed_data)
-    nli_test = BatchedNLIDataset(test_indexed_data)
+    nli_valid_out_domain = BatchedNLIDataset(valid_out_domain_indexed_data)
 
     train_loader = DataLoader(dataset=nli_train,
                               shuffle=True,
@@ -209,11 +209,11 @@ def load_data_for_batch_processing(train_loc, dev_loc, test_loc):
                             shuffle=False,
                             collate_fn=prepare_data,
                             batch_size=batch_size/3)
-    test_loader = DataLoader(dataset=nli_test,
+    valid_out_domain_loader = DataLoader(dataset=nli_valid_out_domain,
                             shuffle=False,
                             collate_fn=prepare_data,
                             batch_size=batch_size/3)
-    return train_loader, dev_loader, test_loader
+    return train_loader, dev_loader, valid_out_domain_loader
 
 def build_dictionary(datas, lowercase=False):
     base_dir = os.path.dirname(os.path.realpath(__file__))

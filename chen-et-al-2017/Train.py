@@ -28,9 +28,9 @@ worddicts_r = dict()
 for kk, vv in worddicts.items():
     worddicts_r[vv] = kk
 if batch_processing:
-    train, valid, test = load_data_for_batch_processing(train_file_loc, dev_file_loc, test_file_loc, new_batch_size)
+    train, valid, valid_out_domain = load_data_for_batch_processing(train_file_loc, dev_file_loc, valid_out_domain_file_loc, new_batch_size)
 else:
-    train, valid, test = load_data(train_file_loc, dev_file_loc, test_file_loc, batch_size)
+    train, valid, valid_out_domain = load_data(train_file_loc, dev_file_loc, valid_out_domain_file_loc, batch_size)
 
 model = NLI(dim_word, char_nout, dim_char_emb, 'data/glove.840B.300d.txt', worddicts, num_words, dim_hidden).cuda()
 print(print_model_load)
@@ -73,15 +73,15 @@ if reload:
 
         train_acc_history = checkpoint[const_train_acc_history]
         valid_acc_history = checkpoint[const_valid_acc_history]
-        test_acc_history = checkpoint[const_test_acc_history]
+        valid_out_domain_acc_history = checkpoint[const_valid_out_domain_acc_history]
 
         train_loss_history = checkpoint[const_train_loss_history]
         valid_loss_history = checkpoint[const_valid_loss_history]
-        test_loss_history = checkpoint[const_test_loss_history]
+        valid_out_domain_loss_history = checkpoint[const_valid_out_domain_loss_history]
 
         wait_counter = checkpoint[const_wait_counter]
         print("Loaded valid accuracy history = ", valid_acc_history)
-        print("Loaded test accuracy history = ", test_acc_history)
+        print("Loaded valid_out_domain accuracy history = ", valid_out_domain_acc_history)
         print("Loaded best valid accuracy history = ", best_acc)
         print("Loaded last executed training data index = ", last_exec)
     else:
@@ -92,11 +92,11 @@ if reload:
 
         train_acc_history = []
         valid_acc_history = []
-        test_acc_history = []
+        valid_out_domain_acc_history = []
 
         train_loss_history = []
         valid_loss_history = []
-        test_loss_history = []
+        valid_out_domain_loss_history = []
 
         wait_counter = 0
 
@@ -107,11 +107,11 @@ else:
     best_acc = 0.0
     train_acc_history = []
     valid_acc_history = []
-    test_acc_history = []
+    valid_out_domain_acc_history = []
 
     train_loss_history = []
     valid_loss_history = []
-    test_loss_history = []
+    valid_out_domain_loss_history = []
     wait_counter = 0
 
 loss = nn.CrossEntropyLoss(size_average=False)
@@ -156,17 +156,17 @@ for epoch in range(num_epochs):
 
         if uidx % eval_period == 0:
             valid_acc, valid_loss = pred_acc(valid)
-            test_acc, test_loss = pred_acc(test)
+            valid_out_domain_acc, valid_out_domain_loss = pred_acc(valid_out_domain)
             print_stmnt_eval = str.format(
-                "Epoch = {0} ,  Valid Accuracy = {1}, Test Accuracy = {2}, Valid Loss = {3}, Test Loss = {4}", epoch,
-                valid_acc, test_acc, valid_loss, test_loss)
+                "Epoch = {0} ,  Valid Accuracy = {1}, valid_out_domain Accuracy = {2}, Valid Loss = {3}, valid_out_domain Loss = {4}", epoch,
+                valid_acc, valid_out_domain_acc, valid_loss, valid_out_domain_loss)
             print(print_stmnt_eval)
             logger.info(print_stmnt_eval)
 
             valid_acc_history.append(valid_acc)
-            test_acc_history.append(test_acc)
+            valid_out_domain_acc_history.append(valid_out_domain_acc)
             valid_loss_history.append(valid_loss)
-            test_loss_history.append(test_loss)
+            valid_out_domain_loss_history.append(valid_out_domain_loss)
 
             if valid_acc < numpy.array(valid_acc_history).max():
                 wait_counter += 1
@@ -190,10 +190,10 @@ for epoch in range(num_epochs):
                                  const_optimizer_state_dict: optimizer.state_dict(),
                                  const_train_acc_history: train_acc_history,
                                  const_valid_acc_history: valid_acc_history,
-                                 const_test_acc_history: test_acc_history,
+                                 const_valid_out_domain_acc_history: valid_out_domain_acc_history,
                                  const_train_loss_history: train_loss_history,
                                  const_valid_loss_history: valid_loss_history,
-                                 const_test_loss_history: test_loss_history,
+                                 const_valid_out_domain_loss_history: valid_out_domain_loss_history,
                                  const_wait_counter: wait_counter}, model_path)
     
     if(uidx<last_exec):
@@ -201,12 +201,12 @@ for epoch in range(num_epochs):
     train_acc = 1.0 * train_acc / n_train_done
     train_loss = 1.0 * train_loss / n_train_done
     valid_acc, valid_loss = pred_acc(valid)
-    test_acc, test_loss = pred_acc(test)
+    valid_out_domain_acc, valid_out_domain_loss = pred_acc(valid_out_domain)
     train_acc_history.append(train_acc)
 
     print_stmnt_eval = str.format(
-        "Completed Epoch = {0} , Train Accuracy = {1}, Train Loss = {2} Valid Accuracy = {3}, Test Accuracy = {4}, Valid Loss = {5}, Test Loss = {6}",
-        (epoch + 1), train_acc, train_loss, valid_acc, test_acc, valid_loss, test_loss)
+        "Completed Epoch = {0} , Train Accuracy = {1}, Train Loss = {2} Valid Accuracy = {3}, valid_out_domain Accuracy = {4}, Valid Loss = {5}, valid_out_domain Loss = {6}",
+        (epoch + 1), train_acc, train_loss, valid_acc, valid_out_domain_acc, valid_loss, valid_out_domain_loss)
     print(print_stmnt_eval)
     logger.info(print_stmnt_eval)
 
