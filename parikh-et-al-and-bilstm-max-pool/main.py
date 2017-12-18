@@ -7,16 +7,15 @@ import logging
 from config import config
 from pathlib import Path
 from modules.IO import io
-from modules.Utils import utils
-from modules.datasets import BatchedNLIDataset
+from modules.Utils import utils, BatchedNLIDataset
 from trainer import Trainer
 
 
 def train(params, load_only=False):
-    wd, embeddings = io.load_embeddings()
+    wd, embeddings = io.load_embeddings(params)
 
-    dev_pairs = io.read_corpus(params.dev_file, True)
-    label_dict = utils.create_label_dict(dev_pairs)
+    dev_pairs = io.read_corpus(params.dev_matched_file, True)
+    label_dict = utils.create_label_dict(params, dev_pairs)
     dev_data = utils.create_dataset(dev_pairs, wd, label_dict,
                                     max_len1=params.max_len,
                                     max_len2=params.max_len)
@@ -60,7 +59,7 @@ def train(params, load_only=False):
     dropout=("Dropout level", "option", "d", float),
     lr=("Learning rate", "option", "l", float),
     batch_size=("Batch size for neural network training", "option", "b", int),
-    num_epochs=("Number of training epochs", "option", "e", int),
+    epochs=("Number of training epochs", "option", "e", int),
     gru_encode=("Encode sentences with bidirectional GRU", "flag", "E", bool),
     extra_debug=("Whether to provide extra debugging information and" +
                  "log gradient histograms", "flag", "D", bool),
@@ -70,6 +69,8 @@ def train(params, load_only=False):
            "m", str),
     save_loc=("Save location for files", "option",
               "s", str),
+    log_dir=("Log directory for extra debug gradients", "option",
+             "g", str),
     seed=("Seed for training", "option", "S", int),
     embedding_dim=("Dimensions for embedding", "option", "P", int),
     patience=("Patience for early stopping", "option", "p", int),
@@ -78,7 +79,7 @@ def train(params, load_only=False):
     use_intra_attention=("Whether to use intra attention in Parikh et. al.",
                          "flag", "I", bool)
 )
-def main(mode, train_file, dev_matched_file,
+def main(train_file, dev_matched_file,
          dev_mismatched_file,
          gru_encode=False,
          max_len=100,
@@ -87,27 +88,32 @@ def main(mode, train_file, dev_matched_file,
          lr=0.001,
          seed=7,
          patience=20,
-         model="parikh",
+         model="decomposable",
          use_intra_attention=False,
          use_optimizations=False,
          embedding_dim=200,
          extra_debug=False,
          batch_size=100,
-         num_epochs=5,
+         epochs=5,
          save_loc=".",
-         resume=None):
+         resume=None,
+         log_dir=None):
 
     torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
+
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
 
     settings = {
         'train_file': train_file,
         'dev_matched_file': dev_matched_file,
         'dev_mismatched_file': dev_mismatched_file,
         'lr': lr,
+        'max_len': max_len,
         'dropout': dropout,
         'batch_size': batch_size,
-        'num_epochs': num_epochs,
+        'hidden_dim': hidden_dim,
+        'epochs': epochs,
         'gru_encode': gru_encode,
         'resume': resume,
         'model': model,
@@ -115,12 +121,14 @@ def main(mode, train_file, dev_matched_file,
         'use_intra_attention': use_intra_attention,
         'patience': patience,
         'embedding_dim': embedding_dim,
-        'extra_debug': extra_debug
+        'extra_debug': extra_debug,
+        'save_loc': save_loc,
+        'log_dir': log_dir
     }
 
     params = argparse.Namespace()
     params_dict = vars(params)
-    params_dict = settings
+    params_dict.update(settings)
 
     train(params)
 

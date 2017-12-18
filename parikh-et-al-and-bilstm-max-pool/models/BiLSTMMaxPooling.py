@@ -30,9 +30,6 @@ class BiLSTMMaxPooling(nn.Module):
         utils.init_weights(self)
 
     def forward(self, premise, hypo):
-        premise_mask = get_embedded_mask(premise)
-        hypo_mask = get_embedded_mask(hypo)
-
         # B x T => B x T x E
         premise = self.embedding(premise)
         hypo = self.embedding(hypo)

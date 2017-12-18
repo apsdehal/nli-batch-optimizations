@@ -1,4 +1,5 @@
 import torch
+import argparse
 
 from torch import nn
 
@@ -23,13 +24,7 @@ class DecomposableAttention(nn.Module):
         self.hidden_dim = settings['hidden_dim']
         self.nr_classes = settings['nr_classes']
 
-        if settings['hidden_dim'] != settings['projection_dim']:
-            self.projection = nn.Linear(self.hidden_dim,
-                                        settings['projection_dim'])
-        else:
-            self.projection = lambda x: x
-
-        settings['hidden_dim'] = settings['projection_dim']
+        settings['hidden_dim'] = settings['embedding_dim']
         self.hidden_dim = settings['hidden_dim']
 
         if settings['gru_encode']:
@@ -62,9 +57,6 @@ class DecomposableAttention(nn.Module):
 
         premise = self.embedding(premise)
         hypo = self.embedding(hypo)
-
-        premise = self.projection(premise)
-        hypo = self.projection(hypo)
 
         if self.settings['gru_encode']:
             premise = self.encoder(premise)

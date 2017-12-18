@@ -4,8 +4,11 @@ import torch
 import json
 import nltk
 
+from torch import nn
 from torchtext import vocab
 from collections import defaultdict
+
+from modules.Utils import utils
 
 
 class IO:
@@ -30,8 +33,8 @@ class IO:
         path = os.path.join(dirname, 'extra-embeddings.npy')
         torch.save(embeddings[:3], path)
 
-    def load_embeddings(self, normalize=True, generate=True):
-        glove = vocab.GloVe(name='6B', dim=params.projection_dim)
+    def load_embeddings(self, params, normalize=True, generate=True):
+        glove = vocab.GloVe(name='6B', dim=params.embedding_dim)
         wordlist, embeddings = glove.stoi, glove.vectors
 
         mapping = zip(wordlist, range(3, len(wordlist) + 3))
@@ -48,10 +51,10 @@ class IO:
                 self._generate_random_vector(vector_size),
                 self._generate_random_vector(vector_size),
                 self._generate_random_vector(vector_size)])
-            self.write_extra_embeddings(extra, "/scratch/as10656/")
+            self.write_extra_embeddings(extra, params.save_loc)
 
         else:
-            path = os.path.join(load_extra_from, 'extra-embeddings.npy')
+            path = os.path.join(params.save_loc, 'extra-embeddings.npy')
             extra = torch.load(path)
 
         embeddings = torch.cat((extra, embeddings), 0)

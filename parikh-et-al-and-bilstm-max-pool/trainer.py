@@ -1,3 +1,20 @@
+import torch
+import matplotlib.pyplot as plt
+import numpy as np
+import time
+
+from torch import optim, nn
+from torch.autograd import Variable
+from torch.utils.data import DataLoader
+from tensorboardX import SummaryWriter
+
+from models.DecomposableAttention import DecomposableAttention
+from models.BiLSTMMaxPooling import BiLSTMMaxPooling
+
+from modules.Utils import utils
+from modules.EarlyStopping import EarlyStopping
+
+
 class Trainer:
     def __init__(self, params, train_data, dev_data,
                  dev_mismatched_data, embedding):
@@ -13,7 +30,10 @@ class Trainer:
                                        shuffle=True,
                                        batch_size=params.batch_size,
                                        pin_memory=self.cuda_available,
-                                       collate_fn=utils.collate_batch)
+                                       collate_fn=(lambda x:
+                                                   utils.collate_batch(
+                                                       x,
+                                                       self.params)))
         self.dev_loader = DataLoader(dataset=dev_data,
                                      shuffle=False,
                                      batch_size=params.batch_size,
@@ -25,7 +45,11 @@ class Trainer:
 
         self.string_fixer = "=========="
         self.embedding = embedding
-        self.writer = SummaryWriter("/scratch/as10656/nli_models/logs/opti")
+
+        if self.params.log_dir:
+            self.writer = SummaryWriter(self.params.log_dir)
+        else:
+            self.writer = SummaryWriter()
         self.writer_step = 0
 
     def load(self, model_name="decomposable"):
@@ -37,7 +61,7 @@ class Trainer:
             self.model = BiLSTMMaxPooling(self.params, self.embedding)
         self.optimizer = optim.Adam(filter(lambda p: p.requires_grad,
                                            self.model.parameters()),
-                                    lr=params.lr)
+                                    lr=self.params.lr)
 
         self.start_time = time.time()
         self.histories = {
@@ -132,7 +156,7 @@ class Trainer:
                 self.histories['dev_mismatched_acc'], [dev_mismatched_acc])
 
             if not self.early_stopping(dev_matched_loss, dev_matched_acc,
-                                       epoch. self.histories):
+                                       epoch, self.histories):
                 self.print_train_info(epoch, train_acc, train_loss,
                                       dev_matched_acc, dev_matched_loss,
                                       dev_mismatched_acc,
