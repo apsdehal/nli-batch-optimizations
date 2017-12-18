@@ -165,7 +165,7 @@ class Trainer:
                 print("Early stopping activated")
                 print("Restoring earlier state and stopping")
                 self.early_stopping.print_info()
-                plot_learning_curves(self.histories)
+                self.plot_learning_curves(self.histories, "dev_matched_acc")
                 plt.show()
                 break
 
@@ -236,3 +236,12 @@ class Trainer:
         self.early_stopping.print_info()
         print("Elapsed Time: %s" % (utils.get_time_hhmmss(self.start_time)))
         print("Current timestamp: %s" % (utils.get_time_hhmmss()))
+
+    def plot_learning_curves(self, histories, key):
+        plt.cla()
+        plt.grid()
+        plt.plot(np.arange(histories[key].shape[0]), histories[key], c="green",
+                 label=key)
+        plt.legend()
+        plt.xlabel("Epochs")
+        plt.ylabel(key)
