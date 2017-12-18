@@ -6,7 +6,7 @@ import nltk
 
 from torch import nn
 from collections import Counter
-from .modules.datasets import NLIDataset, BatchedNLIDataset
+from modules.datasets import NLIDataset, BatchedNLIDataset
 
 
 # Some code is taken from

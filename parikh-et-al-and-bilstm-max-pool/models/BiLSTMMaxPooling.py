@@ -1,7 +1,7 @@
 import torch
 
 from torch import nn
-from .modules.Utils import utils
+from modules.Utils import utils
 
 
 class BiLSTMMaxPooling(nn.Module):

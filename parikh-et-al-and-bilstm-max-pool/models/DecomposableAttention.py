@@ -2,12 +2,12 @@ import torch
 
 from torch import nn
 
-from .modules.BiRNNEncoder import BiRNNEncoder
-from .modules.Attention import Attention
-from .modules.SoftAlignment import SoftAlignment
-from .modules.Comparison import Comparison
-from .modules.Aggregate import Aggregate
-from .modules.Utils import utils
+from modules.BiRNNEncoder import BiRNNEncoder
+from modules.Attention import Attention
+from modules.SoftAlignment import SoftAlignment
+from modules.Comparison import Comparison
+from modules.Aggregate import Aggregate
+from modules.Utils import utils
 
 
 class DecomposableAttention(nn.Module):

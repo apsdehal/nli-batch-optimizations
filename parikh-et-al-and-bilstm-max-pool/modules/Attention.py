@@ -1,6 +1,6 @@
 from torch import nn
-from .modules.TimeDistributed import TimeDistributed
-from .modules.Utils import utils
+from modules.TimeDistributed import TimeDistributed
+from modules.Utils import utils
 
 
 class Attention(nn.Module):

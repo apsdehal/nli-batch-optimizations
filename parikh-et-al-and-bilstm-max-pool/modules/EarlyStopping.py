@@ -1,8 +1,6 @@
 import os
 
-from torch import nn
-
-from .modules.Utils import utils
+from modules.Utils import utils
 
 
 class EarlyStopping(object):
