@@ -20,6 +20,7 @@ class TimeDistributed(torch.nn.Module):
     this ``Module`` also works if ``batch_size`` is second -
     we always just combine the first two dimensions, then split them.
     """
+
     def __init__(self, module):
         super(TimeDistributed, self).__init__()
         self._module = module
