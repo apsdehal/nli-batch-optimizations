@@ -24,6 +24,8 @@ This project presents a method to organize mini-batches for training models on N
 
 This will install all of the dependencies needed to run the project
 
+Alternatively, you can use `pip install -r requirements.txt` to install all of the requirements.
+
 ## Running and Training
 
 Check respective model's folder's README to run and train that model.
@@ -37,6 +39,10 @@ Check each model's respective folder to find link to pretrained models.
 Following table shows the results obtained:
 
 ![Results](https://i.imgur.com/etEUOvZ.png)
+
+Gradients values for hidden state matrix of BiLSTM:
+
+<img src="https://i.imgur.com/45E70Mh.png" width="40%"/>
 
 ## LICENSE
 
